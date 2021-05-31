@@ -1,0 +1,5 @@
+(sym_lib_table
+  (lib (name UKMaker)(type Legacy)(uri Z:/duncan/EDA/kicad/UKMaker.lib)(options "")(descr ""))
+  (lib (name teensy)(type Legacy)(uri Z:/duncan/EDA/kicad/teensy.lib)(options "")(descr ""))
+  (lib (name SparkFun)(type Legacy)(uri Z:/duncan/EDA/kicad/SparkFun.lib)(options "")(descr ""))
+)
