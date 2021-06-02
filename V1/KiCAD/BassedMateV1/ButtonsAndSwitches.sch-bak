@@ -183,20 +183,12 @@ F 3 "" H 4150 5225 50  0001 C CNN
 	1    3800 4900
 	1    0    0    -1  
 $EndComp
-Wire Wire Line
-	1750 5500 1050 5500
 Text GLabel 1050 5500 0    50   Input ~ 0
 TR_LG1
-Wire Wire Line
-	1750 6050 1050 6050
 Text GLabel 1050 6050 0    50   Input ~ 0
 TR_LG2
-Wire Wire Line
-	1750 6600 1050 6600
 Text GLabel 1050 6600 0    50   Input ~ 0
 TR_LG3
-Wire Wire Line
-	1750 7150 1050 7150
 Text GLabel 1050 7150 0    50   Input ~ 0
 TR_LG4
 $Comp
@@ -464,4 +456,64 @@ F 3 "~" H 1950 7150 50  0001 C CNN
 	1    1950 7150
 	1    0    0    -1  
 $EndComp
+$Comp
+L Device:R R?
+U 1 1 60BCC29B
+P 1400 5500
+F 0 "R?" V 1500 5500 50  0000 C CNN
+F 1 "1K" V 1300 5500 50  0000 C CNN
+F 2 "" V 1330 5500 50  0001 C CNN
+F 3 "~" H 1400 5500 50  0001 C CNN
+	1    1400 5500
+	0    -1   -1   0   
+$EndComp
+Wire Wire Line
+	1050 5500 1250 5500
+Wire Wire Line
+	1550 5500 1750 5500
+$Comp
+L Device:R R?
+U 1 1 60BCF4B5
+P 1400 6050
+F 0 "R?" V 1500 6050 50  0000 C CNN
+F 1 "1K" V 1300 6050 50  0000 C CNN
+F 2 "" V 1330 6050 50  0001 C CNN
+F 3 "~" H 1400 6050 50  0001 C CNN
+	1    1400 6050
+	0    -1   -1   0   
+$EndComp
+Wire Wire Line
+	1050 6050 1250 6050
+Wire Wire Line
+	1550 6050 1750 6050
+$Comp
+L Device:R R?
+U 1 1 60BD0B80
+P 1400 6600
+F 0 "R?" V 1500 6600 50  0000 C CNN
+F 1 "1K" V 1300 6600 50  0000 C CNN
+F 2 "" V 1330 6600 50  0001 C CNN
+F 3 "~" H 1400 6600 50  0001 C CNN
+	1    1400 6600
+	0    -1   -1   0   
+$EndComp
+Wire Wire Line
+	1050 6600 1250 6600
+Wire Wire Line
+	1550 6600 1750 6600
+$Comp
+L Device:R R?
+U 1 1 60BD2529
+P 1400 7150
+F 0 "R?" V 1500 7150 50  0000 C CNN
+F 1 "1K" V 1300 7150 50  0000 C CNN
+F 2 "" V 1330 7150 50  0001 C CNN
+F 3 "~" H 1400 7150 50  0001 C CNN
+	1    1400 7150
+	0    -1   -1   0   
+$EndComp
+Wire Wire Line
+	1050 7150 1250 7150
+Wire Wire Line
+	1550 7150 1750 7150
 $EndSCHEMATC

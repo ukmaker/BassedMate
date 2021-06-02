@@ -86,7 +86,8 @@ NoteGrid noteGrid(trellis);
 #define TR_B3 35
 #define TR_B4 36
 
-#define VELOCITY_BUTTON 2
+#define VOICE_BUTTON 2
+#define VELOCITY_BUTTON 3
 #define RUN_STOP_BUTTON 0
 
 
@@ -106,7 +107,15 @@ AD5204 pots(DP_CS, DP_CLK, DP_SDI);
 
 Sequencer sequencer(27);
 
-int mode = 0;
+#define MODE_DEFAULT 0
+#define MODE_SELECT_VOICE 1
+#define MODE_SELECT_VELOCITY 2
+
+int mode = MODE_DEFAULT;
+
+// 0 means no line. Lines are numbered 1 - 4
+int selectedLine = 0;
+
 
 void leds_thread_func() {
   while(true) twoByTwo.updateLeds();
@@ -117,24 +126,34 @@ void volumeCallback(int volume) {
 }
 
 void selectCallback(int sel) {
-  if(mode == 0) {
-    // ignore unless we're setting the voice for a line
+  if(mode == MODE_DEFAULT) {
     return;
   }
-  if(sel < 27) {
-    sel = 27;
-    controls.setSelect(sel);
-  } else if(sel > 87) {
-    sel = 87;
-    controls.setSelect(sel);
+
+  if(mode == MODE_SELECT_VOICE) {
+    if(sel < 27) {
+      sel = 27;
+      controls.setSelect(sel);
+    } else if(sel > 87) {
+      sel = 87;
+      controls.setSelect(sel);
+    }
+    setVoice(sel);
   }
-  setVoice(sel);
 }
 
 void selectButtonCallback(int unused) {
-  if(mode != 0) {
-    mode = 0;
-    updateMode();
+  switch(mode) {
+    case MODE_DEFAULT:
+      // nothing to do
+      break;
+    case MODE_SELECT_VOICE:
+      // set the chosen voice
+      setVoice(controls.getSelect());
+      break;
+    default:
+      // do nothing
+      break;
   }
 }
 
@@ -150,7 +169,7 @@ void tempoCallback(int tempo) {
 }
 
 void tempoButtonCallback(int unused) {
-
+  noteGrid.setFlashBeat(!noteGrid.getFlashBeat());
 }
 
 void beatCallback(uint8_t beat) {
@@ -166,10 +185,21 @@ void noteOffCallback(uint8_t beat, MIDINote note) {
 }
 
 void voiceButtonCallback() {
+  if(mode == MODE_DEFAULT) {
+    selectedLine = 0;
+    mode = MODE_SELECT_VOICE;
+  }
   // press to select the voice for a channel
-  mode++;
-  if(mode > 4) mode = 0;
+  selectedLine++;
+  
+  if(selectedLine > 4) {
+    mode = MODE_DEFAULT;
+  }
+  updateMode();
+}
 
+void voiceButtonLongCallback() {
+  mode = MODE_DEFAULT;
   updateMode();
 }
 
@@ -177,12 +207,22 @@ void updateMode() {
 
   noteGrid.restoreLines();
 
-  if(mode == 0) {
+  if(mode == MODE_DEFAULT) {
+    
+    twoByTwo.setButtonColour(VOICE_BUTTON, 0x00);
     twoByTwo.setButtonColour(VELOCITY_BUTTON, 0x00);
-  } else {
-    noteGrid.selectLine(mode - 1);
-    controls.setSelect(sequencer.getVoice(mode - 1));
-    showVoice(sequencer.getVoice(mode - 1));
+    
+  } else if(mode == MODE_SELECT_VOICE) {
+    
+    twoByTwo.setButtonColour(VOICE_BUTTON, TBT_B);
+    noteGrid.selectLine(selectedLine - 1);
+    controls.setSelect(sequencer.getVoice(selectedLine - 1));
+    showVoice(sequencer.getVoice(selectedLine - 1));
+    
+  } else if(mode == MODE_SELECT_VELOCITY) {
+    
+    twoByTwo.setButtonColour(VELOCITY_BUTTON, TBT_R+TBT_B);
+    
   }
 }
 
@@ -194,6 +234,56 @@ void runStopButtonCallback() {
     twoByTwo.setButtonColour(RUN_STOP_BUTTON, TBT_G);  
   } else {
     twoByTwo.setButtonColour(RUN_STOP_BUTTON, TBT_R+TBT_B);  
+  }
+}
+
+
+TrellisCallback noteGridEventHandler(keyEvent e) {
+  return noteGrid.handleEvent(e);
+}
+
+/**
+ * Normal keypress toggles the channels voice on or off at the beat
+ * In velocity mode it just rverts to normal mode
+ */
+KeyPressCallback noteGridKeyPressCallback(uint8_t x, uint8_t y) {
+
+  // Ignore keypresses if not in mode 0
+  if(mode == 0) {
+    if(sequencer.toggle(x, y)) {
+      noteGrid.setActive(x,y);
+    } else {
+      noteGrid.setInactive(x,y);
+    }
+  } else if(mode == MODE_SELECT_VELOCITY) {
+    mode = MODE_DEFAULT;
+    noteGrid.cancelBlink();
+    updateMode();    
+  }
+}
+
+/**
+ * A long press in normal mode turns on velocity mode
+ * The volume knob now controls the velocity at this beat
+ * A press on the velocity button tests it
+ * A further short press on the beat reverts to normal mode
+ */
+KeyPressCallback noteGridKeyLongPressCallback(uint8_t x, uint8_t y) {
+
+  if(mode == 0) {
+    
+    mode = MODE_SELECT_VELOCITY;
+    
+    // turn on this beat
+    sequencer.setActive(x, y);
+    noteGrid.setActive(x,y);
+    noteGrid.blink(x,y);
+    updateMode();
+    
+  } else if(mode == MODE_SELECT_VELOCITY) {
+    mode = MODE_DEFAULT;
+    noteGrid.cancelBlink();
+    updateMode();    
   }
 }
 
@@ -220,12 +310,12 @@ IOMUXC_SW_PAD_CTL_PAD_GPIO_AD_B1_00 = (IOMUXC_SW_PAD_CTL_PAD_GPIO_AD_B1_00  & 0b
     Serial.println("failed to begin trellis");
     while(1);
   }
-  
+  Serial.println("startup");  
   controls.attachVolumeCallback(volumeCallback);
   controls.attachSelectCallback(selectCallback);
   controls.attachSelectButtonCallback(selectButtonCallback);
   controls.attachTempoCallback(tempoCallback);
-  //controls.attachTempoButtonCallback(tempoButtonCallback);
+  controls.attachTempoButtonCallback(tempoButtonCallback);
   controls.setVolume(127);
   setMasterVolume(127);
   
@@ -241,16 +331,19 @@ IOMUXC_SW_PAD_CTL_PAD_GPIO_AD_B1_00 = (IOMUXC_SW_PAD_CTL_PAD_GPIO_AD_B1_00  & 0b
   setTempo(70);
 
   twoByTwo.setButtonColour(0, 1);
-  twoByTwo.setButtonColour(1, 3);
-  twoByTwo.setButtonColour(2, 5);
+  twoByTwo.setButtonColour(1, 2);
+  twoByTwo.setButtonColour(2, 4);
   twoByTwo.setButtonColour(3, 7);
   twoByTwo.attachB1Callback(voiceButtonCallback);
+  twoByTwo.attachB1LongPressCallback(voiceButtonLongCallback);
   twoByTwo.attachB2Callback(runStopButtonCallback);
 
   threads.setSliceMicros(10);
   threads.addThread(leds_thread_func, 1);
 
+  noteGrid.attachEventHandler(noteGridEventHandler);
   noteGrid.attachKeyPressCallback(noteGridKeyPressCallback);
+  noteGrid.attachKeyLongPressCallback(noteGridKeyLongPressCallback);
   noteGrid.begin();
 }
 
@@ -263,7 +356,7 @@ void loop() {
 }
 
 void setVoice(uint8_t voice) {
- sequencer.setVoice(mode-1,voice);
+ sequencer.setVoice(selectedLine-1,voice);
  showVoice(voice);
 }
 
@@ -288,25 +381,4 @@ void setMasterVolume(uint8_t volume) {
 void setTempo(int tempo) {
   sequencer.setTempo(tempo);
   screen.printTempo(tempo);
-}
-
-TrellisCallback noteGridKeyPressCallback(keyEvent e) {
-
-  // Ignore keypresses if not in mode 0
-  if(mode != 0) {
-    return 0;
-  }
-    
-  if(e.bit.EDGE == SEESAW_KEYPAD_EDGE_FALLING) {
-    
-    int x = e.bit.NUM % 8;
-    int y = e.bit.NUM / 8;
-
-    if(sequencer.toggle(x, y)) {
-      noteGrid.setActive(x,y);
-    } else {
-      noteGrid.setInactive(x,y);
-    }
-  }
-  return 0;
 }

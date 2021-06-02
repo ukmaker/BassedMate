@@ -17,20 +17,57 @@
 #define NG_BEAT_FLASH_COLOUR 0xaa8811
 #define NG_NOTE_HIGHLIGHT_COLOUR 0x0000ff
 
+#define NG_BLINK_R 0xff
+#define NG_BLINK_G 0x00
+#define NG_BLINK_B 0xaa
+#define NG_BLINK_TICKS 250
+
+typedef void (*KeyPressCallback) (uint8_t x, uint8_t y);
+
 class NoteGrid {
 
   public:
 
-  NoteGrid(Adafruit_MultiTrellis &trellis) : _trellis(trellis), _flashBeat(false) {
+  NoteGrid(Adafruit_MultiTrellis &trellis) : _trellis(trellis), _flashBeat(false), _lastKeyPressed(-1) {
 
     for(int i = 0; i < 4 ; i++) {
       _highlightLine[i] = false;
     }
-    
   }
 
-  void attachKeyPressCallback(TrellisCallback cb) {
+  void attachEventHandler(TrellisCallback cb) {
+    _eventHandler = cb;
+  }
+
+  void attachKeyPressCallback(KeyPressCallback cb) {
     _keyPressCallback = cb;
+  }
+  
+  void attachKeyLongPressCallback(KeyPressCallback cb) {
+    _keyLongPressCallback = cb;
+  }
+
+  // crufty way to get long-press handling in an instance
+  TrellisCallback handleEvent(keyEvent e) {
+
+      // RISING edge means the button has been pressed
+      if(e.bit.EDGE == SEESAW_KEYPAD_EDGE_RISING) {
+        // handle the normal key-press here
+        if(_keyPressCallback != NULL) {
+          int x = e.bit.NUM % 8;
+          int y = e.bit.NUM / 8;
+          _keyPressCallback(x, y);
+        }
+        _lastKeyPressed = e.bit.NUM;
+        _lastKeyPressedTime = millis();
+      }
+    
+      // FALLING edge means the button has been released
+      if(e.bit.EDGE == SEESAW_KEYPAD_EDGE_FALLING) {
+        _lastKeyPressed = -1;
+      }
+      
+      return 0;
   }
 
   void begin() {
@@ -46,7 +83,7 @@ class NoteGrid {
         //activate rising and falling edges on all keys
         _trellis.activateKey(x, y, SEESAW_KEYPAD_EDGE_RISING, true);
         _trellis.activateKey(x, y, SEESAW_KEYPAD_EDGE_FALLING, true);
-        _trellis.registerCallback(x, y, _keyPressCallback);
+        _trellis.registerCallback(x, y, _eventHandler);
         _notes[y][x] = 0x000000;
         _trellis.setPixelColor(x, y, 0x000000); //addressed with x,y
         _trellis.show(); //show all LEDs
@@ -55,15 +92,11 @@ class NoteGrid {
     }
   }
 
-  void flashBeatOn() {
-    _flashBeat = true;
+  void setFlashBeat(bool flash) {
+    _flashBeat = flash;
   }
 
-  void flashBeatOff() {
-    _flashBeat = false;
-  }
-
-  bool flashBeat() {
+  bool getFlashBeat() {
     return _flashBeat;
   }
 
@@ -75,6 +108,16 @@ class NoteGrid {
   void setInactive(uint8_t x, uint8_t y) {
     _notes[y][x] =  false;
     _showNote(x, y);
+  }
+
+  void blink(uint8_t x, uint8_t y) {
+    _blinkX = x;
+    _blinkY = y;
+    _blinkTicks = 0;
+  }
+
+  void cancelBlink() {
+    _blinkX = -1;
   }
   
   
@@ -129,48 +172,98 @@ class NoteGrid {
 
     int hr, hg, hb;
 
-    uint32_t nc;
-    
-    if(_ticks > 0 && _beat >= 0 && _beat < 8) {
-      _ticks--;
-      if((_ticks & 1) == 0) {
-      // make the column glow to show it's the beat
-      r = (r * _ticks ) / NG_GLOW_TICKS;
-      g = (g * _ticks ) / NG_GLOW_TICKS;
-      b = (b * _ticks ) / NG_GLOW_TICKS;
-      
-      for(int i =0; i < 4; i++) {
-        
-        nc  = _noteColour(_beat, i);
-        
-        hr = ((nc & 0x00ff0000) >> 16) + r; 
-        if(hr > 0xff) hr = 0xff;
-        
-        hg = ((nc & 0x00ff00) >> 8) + g; 
-        if(hg > 0xff) hg = 0xff;
-        
-        hb = ((nc & 0x00ff)) + b; 
-        if(hb > 0xff) hb = 0xff;
-        
-        _trellis.setPixelColor(_beat, i, (hr << 16) + (hg << 8) + hb);
-      }
-      _trellis.show();
+    uint32_t nc, now;
+
+    now = millis();
+
+    if(_lastKeyPressed != -1) {
+      if((now - _lastKeyPressedTime) > 500) {
+        if(_keyLongPressCallback != NULL) {
+          int x = _lastKeyPressed % 8;
+          int y = _lastKeyPressed / 8;
+          _keyLongPressCallback(x, y);
+          _lastKeyPressed = -1;
+        }
       }
     }
+
+    if(_blinkX != -1) {
+      
+      if(_blinkTicks > NG_BLINK_TICKS) {
+        _blinkTicks = 0; 
+      }
+      
+      r = NG_BLINK_R;
+      g = NG_BLINK_G;
+      b = NG_BLINK_B;
+      
+      // make the column glow to show it's the beat
+      r = (r * _blinkTicks ) / NG_BLINK_TICKS;
+      g = (g * _blinkTicks ) / NG_BLINK_TICKS;
+      b = (b * _blinkTicks ) / NG_BLINK_TICKS;
+      nc = pixelColour(_blinkX, _blinkY, r, g, b);
+      _trellis.setPixelColor(_blinkX, _blinkY, (r<<16)+(g<<8)+b);
+      _trellis.show();
+      _blinkTicks++;
+    }
+    
+    if(_flashBeat) {
+      if(_ticks > 0 && _beat >= 0 && _beat < 8) {
+        _ticks--;
+        if((_ticks & 1) == 0) {
+          r = 0xaa;
+          g = 0x88;
+          b = 0x11;
+          
+          // make the column glow to show it's the beat
+          r = (r * _ticks ) / NG_GLOW_TICKS;
+          g = (g * _ticks ) / NG_GLOW_TICKS;
+          b = (b * _ticks ) / NG_GLOW_TICKS;
+          
+          for(int i =0; i < 4; i++) {
+            nc  = pixelColour(_beat, i, r, g, b);
+            _trellis.setPixelColor(_beat, i, nc);
+          }
+          _trellis.show();
+        }
+      }
+    }
+  }
+
+  uint32_t pixelColour(uint8_t x, uint8_t y, uint32_t r, uint32_t g, uint32_t b) {
+    uint32_t hr, hg, hb;           
+    uint32_t nc  = _noteColour(x, y);
+    
+    hr = ((nc & 0x00ff0000) >> 16) + r; 
+    if(hr > 0xff) hr = 0xff;
+    
+    hg = ((nc & 0x00ff00) >> 8) + g; 
+    if(hg > 0xff) hg = 0xff;
+    
+    hb = ((nc & 0x00ff)) + b; 
+    if(hb > 0xff) hb = 0xff;
+    
+    return (hr << 16) + (hg << 8) + hb;   
   }
 
 
 protected:
   Adafruit_MultiTrellis &_trellis;
-  TrellisCallback _keyPressCallback;
+  TrellisCallback _eventHandler;
+  KeyPressCallback _keyPressCallback, _keyLongPressCallback;
+  
   bool _notes[4][8];
 
   // 0 means no highlight
   bool _highlightLine[4];
   bool _flashBeat;
+
+  int _blinkX = -1;
+  int _blinkY = -1;
+  uint32_t _blinkTicks = 0;
   
-  uint32_t _ticks;
-  uint8_t _beat, _lastBeat;
+  uint32_t _ticks, _lastKeyPressedTime;
+  int _beat, _lastBeat, _lastKeyPressed = -1;
 
   void _showNote(uint8_t x, uint8_t y) {
     _updateNote(x, y);

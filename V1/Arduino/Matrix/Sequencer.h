@@ -105,6 +105,16 @@ bool toggle(uint8_t x, uint8_t y) {
     return _notes[x][y].played;
 }
 
+void setActive(uint8_t x, uint8_t y) {
+    _notes[x][y].played = true;
+  
+    if(!_notes[x][y].assigned) {      
+      _notes[x][y].note = _voices[y];
+      _notes[x][y].velocity = 127;
+      _notes[x][y].assigned = true;
+    }
+}
+
 protected:
 
 bool _running;

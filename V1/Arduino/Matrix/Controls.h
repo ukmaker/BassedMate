@@ -97,6 +97,10 @@ class Controls {
     _select = select << 1;
   }
 
+  int getSelect() {
+    return _select >> 1;
+  }
+
   void setVolume(uint8_t vol) {
     _volume = vol << 1;
   }

@@ -13,6 +13,18 @@
 
 typedef void (*ButtonCallback) ();
 
+typedef struct Button {
+  
+  Bounce button;
+  ButtonCallback pressCallback;
+  ButtonCallback longPressCallback;
+  uint8_t colour;
+  uint32_t pressedTimestamp;
+  bool longPressRaised;
+  
+} Button;
+
+
 class TwoByTwo {
 
   public:
@@ -49,17 +61,17 @@ class TwoByTwo {
     pinMode(_s3, INPUT_PULLUP);
     pinMode(_s4, INPUT_PULLUP);
 
-    _b1.attach(_s1);
-    _b1.interval(50);
-    
-    _b2.attach(_s2);
-    _b2.interval(50);
-    
-    _b3.attach(_s3);
-    _b3.interval(50);
-    
-    _b4.attach(_s4);
-    _b4.interval(50);
+    _buttons[0].button.attach(_s1);
+    _buttons[1].button.attach(_s2);
+    _buttons[2].button.attach(_s3);
+    _buttons[3].button.attach(_s4);
+
+    for(int i = 0; i < 4; i++) {
+      _buttons[i].colour = 0;
+      _buttons[i].pressedTimestamp = 0;
+      _buttons[i].longPressRaised = false;
+      _buttons[i].button.interval(50);
+    }
 
     _lastUpdated = millis();
     _updateButton = 0;
@@ -67,10 +79,28 @@ class TwoByTwo {
   }
 
   void update() {
-    if(_b1.update() && _b1.fell() && (_b1Callback != NULL)) _b1Callback();
-    if(_b2.update() && _b2.fell() && (_b2Callback != NULL)) _b2Callback();
-    if(_b3.update() && _b3.fell() && (_b3Callback != NULL)) _b3Callback();
-    if(_b4.update() && _b4.fell() && (_b4Callback != NULL)) _b4Callback();
+    for(int i = 0; i < 4 ; i++) {
+      if(_buttons[i].button.update()) {
+        if(_buttons[i].button.fell()) {
+          _buttons[i].pressedTimestamp = millis();
+          _buttons[i].longPressRaised = false;
+          if(_buttons[i].pressCallback != NULL) {
+            _buttons[i].pressCallback();
+          }
+        }
+      }
+
+      if(_buttons[i].button.read() == 0) {
+        if(!_buttons[i].longPressRaised) {
+          if((millis() - _buttons[i].pressedTimestamp) > 500) {
+            _buttons[i].longPressRaised = true;
+            if(_buttons[i].longPressCallback != NULL) {
+              _buttons[i].longPressCallback();
+            }
+          }
+        }
+      }
+    }
   }
 
   void updateLeds() {
@@ -78,7 +108,7 @@ class TwoByTwo {
     int now = millis();
     if((now - _lastUpdated) > TBT_REFRESH) {
       _lastUpdated = now;
-      _blank();
+      digitalWrite(_leds[_updateButton], LOW);
       _updateButton++;
       if(_updateButton > 3) _updateButton = 0;
       _show(_colours[_updateButton] & TBT_R, _colours[_updateButton] & TBT_G, _colours[_updateButton] & TBT_B, _leds[_updateButton]);
@@ -86,21 +116,37 @@ class TwoByTwo {
   }
   
   void attachB1Callback(ButtonCallback cb) {
-    _b1Callback = cb;
+    _buttons[0].pressCallback = cb;
   }
    
   void attachB2Callback(ButtonCallback cb) {
-    _b2Callback = cb;
+    _buttons[1].pressCallback = cb;
   }
    
   void attachB3Callback(ButtonCallback cb) {
-    _b3Callback = cb;
+    _buttons[2].pressCallback = cb;
   }
    
   void attachB4Callback(ButtonCallback cb) {
-    _b4Callback = cb;
+    _buttons[3].pressCallback = cb;
   }
 
+  void attachB1LongPressCallback(ButtonCallback cb) {
+    _buttons[0].longPressCallback = cb;
+  }
+   
+  void attachB2LongPressCallback(ButtonCallback cb) {
+    _buttons[1].longPressCallback = cb;
+  }
+   
+  void attachB3LongPressCallback(ButtonCallback cb) {
+    _buttons[2].longPressCallback = cb;
+  }
+   
+  void attachB4LongPressCallback(ButtonCallback cb) {
+    _buttons[3].longPressCallback = cb;
+  }
+   
   void setButtonColour(uint8_t button, uint8_t colour) {
     if(button >= 0 && button < 4) _colours[button] = colour; 
   }
@@ -116,6 +162,8 @@ class TwoByTwo {
 
   uint8_t _colours[4];
 
+  Button _buttons[4];
+
 
   void _show(bool r, bool g, bool b, uint8_t button) {
     // and switch on the LEDS
@@ -125,14 +173,5 @@ class TwoByTwo {
     // enable the button
     digitalWrite(button, HIGH);
   }
-  
-  void _blank() {
-    digitalWrite(_leds[0], LOW);
-    digitalWrite(_leds[1], LOW);
-    digitalWrite(_leds[2], LOW);
-    digitalWrite(_leds[3], LOW);
-  }
-
-
 };
 #endif
