@@ -14,12 +14,10 @@
 #define NG_NOTE_UNASSIGNED_COLOUR_H 0x000088
 #define NG_NOTE_ASSIGNED_COLOUR_H 0x00ff88
 
-#define NG_BEAT_FLASH_COLOUR 0xaa8811
-#define NG_NOTE_HIGHLIGHT_COLOUR 0x0000ff
+#define NG_BEAT_FLASH_COLOUR 0x222200
+#define NG_NOTE_HIGHLIGHT_COLOUR 0x000022
+#define NG_VELOCITY_BLINK_COLOUR 0xff00aa
 
-#define NG_BLINK_R 0xff
-#define NG_BLINK_G 0x00
-#define NG_BLINK_B 0xaa
 #define NG_BLINK_TICKS 250
 
 typedef void (*KeyPressCallback) (uint8_t x, uint8_t y);
@@ -73,9 +71,9 @@ class NoteGrid {
   void begin() {
     
     for(int i = 0; i < 32; i++){
-        _trellis.setPixelColor(i, ((i & 0b00110000) << 12) + ((i & 0b00001100) << 4) + (i & 0b00000011)); //addressed with keynum
+        _trellis.setPixelColor(i, 0xff00aa);
         _trellis.show();
-        delay(50);
+        delay(20);
     }
     
     for(int y = 0; y < 4; y++){
@@ -87,7 +85,7 @@ class NoteGrid {
         _notes[y][x] = 0x000000;
         _trellis.setPixelColor(x, y, 0x000000); //addressed with x,y
         _trellis.show(); //show all LEDs
-        delay(50);
+        delay(20);
       }
     }
   }
@@ -163,14 +161,15 @@ class NoteGrid {
     _lastBeat = _beat;
     _beat = column;
   }
+  
+  void showPausedBeat(int column) {
+    _ticks = NG_GLOW_TICKS;
+    _lastBeat = _beat;
+    _beat = column;
+//    _pausedBeat = true;
+  }
 
   void tick() {
-    
-    int r = 0xaa;
-    int g = 0x88;
-    int b = 0x11;
-
-    int hr, hg, hb;
 
     uint32_t nc, now;
 
@@ -192,17 +191,9 @@ class NoteGrid {
       if(_blinkTicks > NG_BLINK_TICKS) {
         _blinkTicks = 0; 
       }
-      
-      r = NG_BLINK_R;
-      g = NG_BLINK_G;
-      b = NG_BLINK_B;
-      
-      // make the column glow to show it's the beat
-      r = (r * _blinkTicks ) / NG_BLINK_TICKS;
-      g = (g * _blinkTicks ) / NG_BLINK_TICKS;
-      b = (b * _blinkTicks ) / NG_BLINK_TICKS;
-      nc = pixelColour(_blinkX, _blinkY, r, g, b);
-      _trellis.setPixelColor(_blinkX, _blinkY, (r<<16)+(g<<8)+b);
+  
+      nc = pixelMixColour(_blinkX, _blinkY, NG_VELOCITY_BLINK_COLOUR, _blinkTicks, NG_BLINK_TICKS);
+      _trellis.setPixelColor(_blinkX, _blinkY, nc);
       _trellis.show();
       _blinkTicks++;
     }
@@ -211,39 +202,53 @@ class NoteGrid {
       if(_ticks > 0 && _beat >= 0 && _beat < 8) {
         _ticks--;
         if((_ticks & 1) == 0) {
-          r = 0xaa;
-          g = 0x88;
-          b = 0x11;
-          
-          // make the column glow to show it's the beat
-          r = (r * _ticks ) / NG_GLOW_TICKS;
-          g = (g * _ticks ) / NG_GLOW_TICKS;
-          b = (b * _ticks ) / NG_GLOW_TICKS;
-          
           for(int i =0; i < 4; i++) {
-            nc  = pixelColour(_beat, i, r, g, b);
+            nc  = pixelMixColour(_beat, i, NG_BEAT_FLASH_COLOUR, _ticks, NG_GLOW_TICKS);
             _trellis.setPixelColor(_beat, i, nc);
           }
           _trellis.show();
         }
       }
     }
+
+    _trellis.read();
   }
 
-  uint32_t pixelColour(uint8_t x, uint8_t y, uint32_t r, uint32_t g, uint32_t b) {
-    uint32_t hr, hg, hb;           
+  uint32_t pixelMixColour(uint8_t x, uint8_t y, uint32_t colour, uint32_t per, uint32_t cent) {
+    
+    uint32_t nr, ng, nb, mr, mg, mb, tr, tg, tb;           
     uint32_t nc  = _noteColour(x, y);
+    uint32_t percent = (100 * per) / cent;
     
-    hr = ((nc & 0x00ff0000) >> 16) + r; 
-    if(hr > 0xff) hr = 0xff;
-    
-    hg = ((nc & 0x00ff00) >> 8) + g; 
-    if(hg > 0xff) hg = 0xff;
-    
-    hb = ((nc & 0x00ff)) + b; 
-    if(hb > 0xff) hb = 0xff;
-    
-    return (hr << 16) + (hg << 8) + hb;   
+    nr = ((nc & 0xff0000) >> 16);
+    ng = ((nc & 0x00ff00) >> 8);
+    nb = ((nc & 0x0000ff));
+   
+    mr = ((colour & 0xff0000) >> 16);
+    mg = ((colour & 0x00ff00) >> 8);
+    mb = (colour & 0x0000ff);
+
+    // now mix the colours
+    // 0% -> original colour
+    // 50% -> mix colour
+    // 100% -> back to original colour
+   if(percent > 50) {
+    percent = 100 - percent;
+   }
+
+   percent = 2 * percent;
+   tr = ((mr * percent) + (nr * (100 - percent))) / 100;
+   
+   if(tr > 0xff) tr = 0xff;
+
+   tg = ((mg * percent) + (ng * (100 - percent))) / 100;
+   if(tg > 0xff) tg = 0xff;
+
+   tb = ((mb * percent) + (nb * (100 - percent))) / 100;
+   if(tb > 0xff) tb = 0xff;
+
+   return (tr << 16) + (tg << 8) + tb;
+   
   }
 
 

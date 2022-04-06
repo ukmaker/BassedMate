@@ -157,6 +157,7 @@ class VS1053 {
     SPI.setClockDivider(SPI_CLOCK_DIV128);
     SPI.setBitOrder(MSBFIRST);
     // midi.enableMIDI();
+    Serial2.begin(31250);
   }
 
   void enableMIDI() {
@@ -183,13 +184,14 @@ class VS1053 {
   }
 
   void sendMIDIByte(uint8_t b) {
+    Serial2.write(b);/**
     digitalWrite(_dcs, LOW);
     delayMicroseconds(1);
     SPI.transfer(0x00);
     SPI.transfer(b);
     delayMicroseconds(1);
     digitalWrite(_dcs, HIGH); 
-    delayMicroseconds(1);
+    delayMicroseconds(1);**/
   }
     
   void noteOn(MIDINote note) {

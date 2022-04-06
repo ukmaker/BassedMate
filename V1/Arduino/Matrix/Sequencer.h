@@ -15,7 +15,7 @@ class Sequencer {
 public:
 
 
-Sequencer(int defaultVoice) : _running(false), _millisPerBeat(1000), _ticks(0) {
+Sequencer(int defaultVoice) {
   
   for(int y = 0; y < 4; y++) {
     _voices[y] = defaultVoice;
@@ -76,12 +76,22 @@ bool isRunning() {
   return _running;
 }
 
+void reset() {
+  _running = false;
+  _ticks = 0;
+  _beat = -1;
+}
+
 void setVoice(uint8_t channel, int voice) {
   _voices[channel] = voice;
 }
 
 int getVoice(uint8_t channel) {
   return _voices[channel];
+}
+
+int getBeat() {
+  return _beat;
 }
 
 
@@ -115,12 +125,18 @@ void setActive(uint8_t x, uint8_t y) {
     }
 }
 
+
+  void setNoteVolume(uint8_t x, uint8_t y, uint8_t volume) {
+    _notes[x][y].velocity = volume;
+  }
+
+
 protected:
 
-bool _running;
-int _ticks;
-int _millisPerBeat;
-int _beat;
+bool _running = false;
+int _ticks = 0;
+int _millisPerBeat = 0;
+int _beat = -1;
 
 MIDINote _notes[8][4];
 MIDINote _lastNotes[4];

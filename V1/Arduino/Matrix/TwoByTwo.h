@@ -103,15 +103,23 @@ class TwoByTwo {
     }
   }
 
+  /**
+   * For now this method runs on the Teensy on its own thread so that the LEDS
+   * can be updated fast enough that they don't flash
+   */
   void updateLeds() {
 
     int now = millis();
     if((now - _lastUpdated) > TBT_REFRESH) {
       _lastUpdated = now;
       digitalWrite(_leds[_updateButton], LOW);
+      
       _updateButton++;
-      if(_updateButton > 3) _updateButton = 0;
-      _show(_colours[_updateButton] & TBT_R, _colours[_updateButton] & TBT_G, _colours[_updateButton] & TBT_B, _leds[_updateButton]);
+      if(_updateButton > 3) {
+        _updateButton = 0;
+      }
+    
+      _show(_buttons[_updateButton].colour & TBT_R, _buttons[_updateButton].colour & TBT_G, _buttons[_updateButton].colour & TBT_B, _leds[_updateButton]);
     }
   }
   
@@ -148,19 +156,16 @@ class TwoByTwo {
   }
    
   void setButtonColour(uint8_t button, uint8_t colour) {
-    if(button >= 0 && button < 4) _colours[button] = colour; 
+    if(button >= 0 && button < 4) {
+      _buttons[button].colour = colour; 
+    }
   }
 
   protected:
   int _r, _g, _b, _leds[4], _s1, _s2, _s3, _s4;
 
-  Bounce _b1, _b2, _b3, _b4;
-  ButtonCallback _b1Callback, _b2Callback, _b3Callback, _b4Callback;
-
   int _lastUpdated;
   int _updateButton;
-
-  uint8_t _colours[4];
 
   Button _buttons[4];
 
